@@ -1,0 +1,156 @@
+======================================================
+README.FIRST - BarraCUDA 0.6.2 beta
+======================================================
+
+Thank you very much for downloading BarraCUDA.  This software is based on BWA version 0.4.9 and uses NVIDIA GPUs to accelerate the alignment of short sequencing reads from Next-generation Sequencers to a reference genome.  This package contains the source code of the program and also a set of sample data from the NCBI Sequencing Read Archive (www.ncbi.nlm.nih.gov/sra) for testing purpose.
+
+System Requirements
+----------------------
+Before installing BarraCUDA, please ensure that your computer has:
+
+- A modern x86-based processor
+- 4 GB of system memory (for large genomes)
+- At least 20 GB of disk space (for large genomes and large sequencing libraries)
+- An NVIDIA GPU with at least 768 RAM (see below) and CUDA capability of 1.3 or above, or a Tesla C1060/C2070 or above (for large genomes)
+- A Linux/UNIX operating system
+
+VRAM Requirements
+----------------------
+BarraCUDA needs a memory space of at least the size of the BWT-encoded genome (the size of .bwt + .rbwt files) + another 675 MB of buffer to perform alignments.  
+
+
+The software also requires:
+
+- NVIDIA CUDA toolkit SDK version 3.2 or above
+- GCC and G++ Version 4.3 or above
+- NVIDIA graphics driver version 260.19.21 or above
+- zlib-devel (or zlib1g-dev) library
+
+
+Note for indexing large genomes
+-------------------------------
+
+The default index command now selects the appropiate algorithms for indexing genomes.  However you can still select
+specific algorithm ('bwtsw' or 'is')for BWT indexing.  The 'is' algorithm is quick but only work on small genomes,
+for large genomes, like the human genome please use the bwtsw algorithm.
+
+
+Note for mapping reads on to the Human genome using NVIDIA Tesla C2050 and GeForce GTX580
+-----------------------------------------------------------------------------------------
+In the past we had to change a parameter in the code in order to lower the buffer size requirement for mapping 
+reads to the Human Genome using a Tesla C2050.  However we now find that mapping is possible without altering 
+the code by using the V37 reference genome from the 1000 genome project below:
+
+http://www.1000genomes.org/analysis
+
+This is because the size of V37 build used in the project is smaller than that of the NCBI36 assembly
+(BWT indices are 400MB smaller) and therefore 3GB is sufficient to perform the alignment without any problem. 
+
+
+Changes in 0.5 beta
+----------------------
+- initial release
+
+
+Changes in 0.5.1 beta
+----------------------
+- Unified 32-bit and 64-bit source code
+- Now works with CUDA toolkit version 3.2 and NVIDIA driver 260.19.21 even for full genomes (< 4 gigabases)
+- Added support for NVIDIA Fermi cards
+- Dropped support for older NVIDIA cards (now a GT200 based graphics with compute capability of 1.3 or above is required, e.g. GTX280, Tesla C1060 or above)
+- Fixed an error in reporting alignment timings if compile with GCC 4.4.x
+- Fixed the segmentation fault error when the program exits to the prompt
+- Reduce maximum read length support from 125 to 80 bp to relief register pressure
+- Added SAM headers in SAM output
+
+Changes in 0.6 beta
+----------------------
+- Now works with CUDA toolkit 4.0 or above
+- Magnitude of speed boost (12x) on long sequence reads compared to v0.5.1 beta, especially with Fermi cards
+- Added memory detection
+- Added seeding capability
+- Default value for option '-o' changed to 1 (same as BWA), use '-o 0' to disable gap openings
+- Increase max read length to 150 bp
+
+Changes in 0.6.1 beta
+----------------------
+- NEW CUDA mode for samse core
+- Enhanced memory detection
+- Tested working with CUDA toolkit 4.1 or above
+- Added automatic BWT size detection in 'index' core to automatically choose between 'is' or 'bwtsw' BWT building algorithm
+- Added RG line support
+- Improved infer size calculation for paired-end alignments
+- Added BWA v0.5.x compatible .sai output option
+
+Changes in 0.6.2 beta
+----------------------
+- New POSIX multithreading support for sampe core
+- New fast alignment mode through aggressive ungapped seeding
+- (R256) use '-f' to disable fast alignment mode
+
+Compiling BarraCUDA
+----------------------
+
+To compile BarraCUDA, make sure you have GCC 4.3/4.4 and CUDA toolkit SDK version 3.2 (or above) installed in the system.  The software should compile automatically by typing in the root directory of the source package:
+
+	make all
+
+and the binary "barracuda" should be generated and placed in 'bin' folder.
+
+
+To perform a quick test to see if BarraCUDA can work with the GPU in your system, you can type:
+
+	barracuda deviceQuery
+
+and it should list out all the CUDA-capable devices available in your system, e.g. for a PC with an NVIDIA Geforce GTX295, Tesla C1060, and a C2050 it will list:
+
+	0 895 13
+	1 895 13
+	2 4095 13
+	3 3071 20
+	
+The first number is the CUDA device number, followed by the amount of GPU memory in MB and the third is CUDA compute capability, 13 means 1.3.
+
+
+Pre-compiled binaries
+---------------------
+
+Pre-compiled binaries are no longer available from this release
+
+
+Sample data
+-----------
+
+A set of budding yeast data is included in the package and it is a trimmed version of 65536 35 bp sequencing reads from accession SRR002062 from the NCBI Sequencing Read Archive.
+
+In order to test the functionality of BarraCUDA, you will need to perform the BWT-transformation of the yeast genome by:
+
+	barracuda index sample_data/Saccharomyces_cerevisiae.SGD1.01.50.dna_rm.toplevel.fa
+
+Then perform the alignment by:
+
+	barracuda aln sample_data/Saccharomyces_cerevisiae.SGD1.01.50.dna_rm.toplevel.fa sample_data/sample_reads.fastq > quicktest.sai
+
+And finally convert the SAI format to SAM:
+
+	barracuda samse sample_data/Saccharomyces_cerevisiae.SGD1.01.50.dna_rm.toplevel.fa quicktest.sai sample_data/sample_reads.fastq > quicktest.sam
+
+
+
+For computers with multi-CUDA devices
+--------------------------------------
+
+For computers with more than one CUDA-capable GPU, BarraCUDA automatically selects the best GPU based on number of SIMT processors.  Users can also specify which CUDA device the software is to be executed on by using the ‘-C’ option followed by the device number.  In order to take advantage of multiple GPUs in a system, BarraCUDA is accompanied with two scripts, namely ‘barracuda-multi-se’ and ‘barracuda-multi-pe’ to align parallel single-end reads and paired-end reads respectively using multiple GPUs.  ‘barracuda-multi-se’ automatically detects the number of CUDA devices in the computer, splits the input .fastq read files according to the number of CUDA devices and calls multiple instances of BarraCUDA to align sequencing reads (aln and samse) in parallel.  Once the alignment finishes, the script joins the files back into one single SAM file. For paired-end reads, ‘barracuda-multi-pe’ calls two instances of BarraCUDA to align the two paired .fastq read files at the same time and generates a single SAM output using the ‘sampe’ core.  At the time of writing, ‘barracuda-multi-pe’ does not support more than 2 GPUs while ‘barracuda-multi-se’ is not bounded by the number of CUDA devices.
+
+In order to use the scripts, you have to put the BarraCUDA binary into the default path by:
+
+	export PATH=$PATH:<your_barracuda_bin_folder>
+
+To call barracuda-multi-se, type:
+
+	barracuda-multi-se <reference> <reads.fastq> <alignment.sam> -options
+
+For barracuda-multi-pe:
+
+	barracuda-multi-pe <reference> <reads1.fastq> <reads2.fastq> <alignment.sam> -options
+
